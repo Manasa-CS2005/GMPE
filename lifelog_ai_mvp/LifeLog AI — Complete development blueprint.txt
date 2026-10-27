@@ -1,0 +1,889 @@
+# LifeLog AI
+## Complete Application Development Plan
+
+**Project type:** Full-stack, multimodal Generative AI application  
+**Primary purpose:** Transform voice notes, recordings, photographs and documents into personalized journals, organized memories, actionable tasks and creative content.
+
+---
+
+# 1. Complete Feature Scope
+
+## Module 1: User Registration, Login and Authentication
+
+### 1.1 Registration
+- Create an account using name, email address and password.
+- Validate email format and password strength.
+- Check whether the email is already registered.
+- Hash passwords securely before storing them.
+- Verify email address.
+- Accept privacy policy and terms of service.
+- Display appropriate success and error messages.
+
+### 1.2 Login
+- Login using email and password.
+- Secure session management.
+- Remember-me option.
+- Logout from the current session.
+- Logout from all sessions.
+- Login error handling and rate limiting.
+- Forgot-password and password-reset workflow.
+
+### 1.3 Account Security
+- Email verification.
+- Secure password reset using expiring tokens.
+- Optional two-factor authentication as an enhancement.
+- Session expiration and refresh.
+- Protection against brute-force login attempts.
+- Account deletion and data removal workflow.
+
+**Completion requirement:** Users must be able to register, log in, log out, reset their password and access only their own private data.
+
+---
+
+## Module 2: User Profile and Personalization
+
+Every user will have a dedicated profile.
+
+### Profile fields
+- Profile picture.
+- Full name and display name.
+- Email address.
+- Date of birth, optional.
+- Preferred language.
+- Time zone.
+- Writing style preference.
+- Preferred journal tone.
+- Preferred reminder time.
+- Preferred content style.
+- Interests and goals.
+
+### Personalization features
+- Select preferred journal-writing style.
+- Choose between concise, detailed, reflective and conversational writing.
+- Configure preferred vlog and social-media formats.
+- Save frequently used prompt modes.
+- Set notification preferences.
+- View account creation date and usage statistics.
+
+Users must be able to edit their profiles and delete optional personal information.
+
+---
+
+## Module 3: Main Dashboard
+
+The dashboard will be the main landing page after login.
+
+### Dashboard components
+
+1. **Welcome section:** Personalized greeting and current date.
+2. **Quick actions:** Record voice note, upload files, write a journal and view tasks.
+3. **Today's activity:** Notes, recordings, photographs and generated entries.
+4. **Daily summary:** Events, achievements, challenges and reflections.
+5. **Pending tasks:** Tasks extracted from notes, with due dates where provided.
+6. **Upcoming reminders:** Scheduled notifications.
+7. **Memory timeline:** Recently saved daily memories.
+8. **Mood overview:** Optional trends based on user-provided notes.
+9. **Creative content:** Recent vlog scripts, captions and story ideas.
+10. **Tomorrow preview:** Upcoming tasks and suggested activities.
+11. **Usage information:** Number of memories and files stored.
+
+The dashboard must display real information from the logged-in user's account rather than hardcoded demonstration data.
+
+---
+
+## Module 4: Daily Input and Memory Capture
+
+Users should have several ways to capture their day.
+
+### 4.1 In-app voice recording
+- Start, pause, resume and stop recording.
+- Display a recording timer.
+- Display recording status and audio levels where supported.
+- Preview the recording before submission.
+- Play, delete or re-record before saving.
+- Upload the recording for transcription.
+- Display transcription progress and errors.
+
+### 4.2 Upload audio recordings
+Supported formats should include commonly used formats such as WAV, MP3, M4A and WebM, subject to the transcription provider's capabilities.
+
+Features:
+- Select one or more audio files.
+- Validate file type and size.
+- Display upload progress.
+- Play uploaded recordings.
+- Transcribe recordings into text.
+- Edit the transcript before AI processing.
+- Keep the original recording when the user chooses to retain it.
+
+### 4.3 Text input
+- Write daily notes manually.
+- Save drafts.
+- Edit previously written notes.
+- Add titles, tags and dates.
+- Autosave drafts.
+- Continue an unfinished journal entry.
+
+### 4.4 Photograph uploads
+- Upload photographs from a device.
+- Preview and remove photographs.
+- Add captions and tags.
+- Attach photographs to a particular day's memory.
+- Extract image descriptions using a vision-capable model.
+- Allow users to edit or reject extracted descriptions.
+
+### 4.5 Document and file uploads
+- Upload PDF, TXT, DOCX and other explicitly supported formats.
+- Preview filenames, sizes and upload status.
+- Extract readable text from supported documents.
+- Attach documents to daily memories.
+- Summarize documents when requested.
+- Extract relevant events, plans or tasks from uploaded material.
+- Preserve the original file for later access, subject to user settings.
+
+### 4.6 Multiple-input daily memory
+A user should be able to combine a voice recording, typed notes, photographs and documents into one daily memory.
+
+For example, a user uploads a voice note describing a college presentation, a photograph from the event and a PDF containing project notes. LifeLog AI organizes these inputs under the same day and uses the available evidence to create a journal.
+
+---
+
+## Module 5: Speech-to-Text and Multimodal Understanding
+
+### Processing pipeline
+
+1. Receive text, audio, images or documents.
+2. Validate and store the original inputs.
+3. Transcribe audio into editable text.
+4. Extract text from supported documents.
+5. Generate descriptions for relevant images when requested.
+6. Combine selected information into a unified daily record.
+7. Detect duplicate or overlapping information where feasible.
+8. Ask the user to correct ambiguous details.
+9. Send the approved information to the day-understanding engine.
+
+### Important rules
+- Do not invent events, people, locations or achievements.
+- Distinguish explicit facts from AI-generated suggestions.
+- Do not assume a person's emotional state solely from a photograph.
+- Preserve dates and names accurately where possible.
+- Allow users to correct transcription errors.
+- Make processing failures recoverable.
+
+---
+
+## Module 6: AI Day-Understanding Engine
+
+This is the core intelligence layer of LifeLog AI.
+
+It converts unstructured inputs into a structured representation of the user's day.
+
+### Information to extract
+- Events and activities.
+- People and places explicitly mentioned.
+- Important moments.
+- Achievements and completed work.
+- Challenges and concerns.
+- Feelings explicitly described by the user.
+- Pending tasks.
+- Future plans.
+- Deadlines and times when explicitly provided.
+- Goals and intentions.
+- Memories linked to photographs or documents.
+
+### Structured output
+
+The system should produce validated data with fields such as:
+
+- Date and summary.
+- Events.
+- Achievements.
+- Challenges.
+- User-described mood.
+- Completed tasks.
+- Pending tasks.
+- Future plans.
+- Important moments.
+- Source references.
+
+Use Pydantic models or equivalent schema validation to ensure consistent output.
+
+Each extracted item should retain its source where practical, allowing the user to verify why the system included it.
+
+---
+
+## Module 7: Prompt Modes and Personalized Generation
+
+Users should choose how LifeLog AI processes and presents their memories.
+
+### Required modes
+
+**1. Simple Journal**
+- Convert the note into a natural diary entry.
+- Preserve the user's meaning.
+- Avoid unnecessary details.
+
+**2. Personal Persona**
+- Generate a warm, first-person and reflective entry.
+- Adapt to the user's saved writing preferences.
+
+**3. Structured Day**
+- Organize events, achievements, challenges and pending tasks into sections.
+
+**4. Reflection Mode**
+- Summarize what went well.
+- Identify challenges described by the user.
+- Offer gentle reflection questions.
+- Suggest practical lessons without inventing experiences.
+
+**5. Explain Through an Analogy**
+- Explain a complicated event, concept or lesson using a suitable analogy.
+- Let the user request a simpler or more detailed explanation.
+
+**6. Vlog Creator**
+- Convert the day's events into a short-video script.
+- Include a hook, suggested shots, voice-over and ending.
+
+**7. Social Media Creator**
+- Generate captions, story text, reel scripts and hashtags.
+- Provide alternative tones and lengths.
+- Keep personal information private unless the user chooses to share it.
+
+**8. Custom Prompt Mode**
+- Allow users to enter their own instructions.
+- Provide reusable saved prompts.
+- Validate the requested output format.
+
+### Generation controls
+- Short, medium and detailed output lengths.
+- First-person or third-person writing.
+- Formal, casual, emotional or professional tone.
+- Regenerate, edit, save, copy and export.
+- Compare different prompt outputs.
+
+---
+
+## Module 8: Personal Journal and Memory Library
+
+Every user should have a searchable library of saved memories.
+
+### Features
+- Create, edit and delete journal entries.
+- Save generated entries.
+- Link entries to original recordings and uploaded files.
+- Add dates, tags and titles.
+- Search by keyword.
+- Filter by date, tag and content type.
+- Browse memories by day, week, month and year.
+- Mark favourite memories.
+- Pin important entries.
+- View the original note beside the generated entry.
+- Export selected entries.
+
+### Memory timeline
+Present saved memories chronologically, with relevant photographs, journal excerpts and associated files.
+
+The timeline should support empty states, loading states and pagination for users with many memories.
+
+---
+
+## Module 9: Task Management and To-Do Lists
+
+LifeLog AI should turn explicitly identified pending actions into manageable tasks.
+
+### Task features
+- Extract tasks from voice notes and documents.
+- Create tasks manually.
+- Edit task titles and descriptions.
+- Set due dates and times.
+- Assign priorities.
+- Mark tasks complete or incomplete.
+- Postpone or reschedule tasks.
+- Delete tasks.
+- Filter by pending, completed and overdue.
+- Link tasks to the memory from which they originated.
+- Display tasks on the dashboard and calendar.
+
+### Task validation
+The AI must not invent deadlines. If a note says, "I should contact my teammate tomorrow," the system may suggest a task for tomorrow, but it should identify the date as an interpreted suggestion and let the user confirm it.
+
+---
+
+## Module 10: Schedule Generator and Smart Reminders
+
+### Schedule generator
+- Suggest a daily plan using tasks and user-selected availability.
+- Allow users to set working hours and preferred routines.
+- Provide editable time blocks.
+- Resolve scheduling conflicts where possible.
+- Let users approve the proposed schedule before saving.
+
+### Reminder system
+- Create reminders manually.
+- Create proposed reminders from extracted tasks.
+- Require confirmation for uncertain deadlines.
+- Support one-time and recurring reminders.
+- Allow reminders to be edited, snoozed or dismissed.
+- Display upcoming reminders.
+- Send notifications through supported channels.
+
+### Notification channels
+- In-app notifications.
+- Email reminders.
+- Browser or mobile push notifications as a later enhancement.
+
+**Technical requirement:** The AI proposes tasks and reminder times; a real scheduler and notification service deliver the reminders. Notifications must not depend on the user keeping the app open.
+
+---
+
+## Module 11: Vlog and Social-Media Studio
+
+### Vlog generation
+- Generate daily vlog scripts.
+- Suggest a hook and scene sequence.
+- Create voice-over text.
+- Suggest shots based on available memories.
+- Estimate script length.
+- Offer short and long versions.
+- Save and export scripts.
+
+### Instagram and short-form content
+- Generate captions.
+- Generate story sequences.
+- Suggest reel concepts.
+- Generate relevant hashtags.
+- Offer different writing tones.
+- Create a content calendar from user-approved plans.
+- Save favourite outputs.
+
+All outputs should be drafts. The app must not publish content to external platforms without an explicitly authorized publishing workflow.
+
+---
+
+## Module 12: Visual Memory Generator
+
+### Features
+- Generate image prompts from selected memories.
+- Let users edit the prompts.
+- Optionally connect an image-generation service.
+- Save generated images to the relevant memory.
+- Generate optional illustrated daily summaries.
+- Create a visual memory gallery.
+- Allow users to remove generated images.
+
+### Important distinction
+An image prompt can be generated without generating an image. Actual image creation requires a configured image-generation model or service.
+
+The application should label AI-generated visuals and avoid presenting invented scenes as authentic photographs of real events.
+
+---
+
+## Module 13: Tomorrow Planner and Suggestions
+
+Based on user-approved tasks, plans and interests, the system can suggest:
+
+- Tomorrow's priorities.
+- Pending tasks to carry forward.
+- A possible daily routine.
+- Vlog ideas based on planned activities.
+- Journal reflection questions.
+- Creative content ideas.
+- Activities aligned with the user's stated goals.
+
+Users should be able to dismiss suggestions, save them or convert them into tasks.
+
+The application must distinguish confirmed plans from AI suggestions.
+
+---
+
+## Module 14: Search, Analytics and Export
+
+### Search
+- Search journal text, titles and tags.
+- Find memories by date.
+- Filter by associated media.
+- Find tasks linked to a memory.
+
+### Personal insights
+- Number of entries created.
+- Tasks completed over time.
+- Journal-writing frequency.
+- User-described mood trends, when enabled.
+- Frequently used tags and content modes.
+
+These insights should be descriptive, not medical diagnoses or unsupported personality assessments.
+
+### Export
+- Export a journal entry as TXT or PDF.
+- Export selected memories in a supported format.
+- Download original uploaded files.
+- Export tasks and schedules.
+- Offer a complete account-data export.
+- Include generated content and relevant metadata where feasible.
+
+---
+
+## Module 15: Notifications and User Settings
+
+- In-app notification centre.
+- Read and unread notification status.
+- Reminder preferences.
+- Email notification preferences.
+- Time-zone configuration.
+- Language and display preferences.
+- Data retention preferences.
+- Audio and file-retention settings.
+- Account deletion.
+- Privacy and consent settings.
+
+---
+
+## Module 16: Administration and Monitoring
+
+For the initial release, an administrator interface should support:
+
+- Viewing basic service health.
+- Monitoring processing failures.
+- Tracking transcription and generation usage.
+- Managing system configuration.
+- Viewing operational logs without exposing private journal contents.
+- Applying storage and upload limits.
+- Managing model and API configuration.
+
+Administrative access must be separated from normal user access. Private user memories should not be broadly visible to administrators by default.
+
+---
+
+# 2. Recommended Technical Architecture
+
+## Frontend
+**React + TypeScript + Vite**
+
+Responsibilities:
+- Registration and login screens.
+- User profile.
+- Dashboard.
+- Voice recording interface.
+- File upload interface.
+- Journal editor.
+- Memory timeline.
+- Task manager.
+- Calendar and reminders.
+- Vlog and social-media studio.
+- Responsive desktop and mobile layouts.
+
+## Backend
+**Python + FastAPI**
+
+Responsibilities:
+- Authentication and authorization.
+- User and profile management.
+- File upload processing.
+- Audio transcription.
+- AI orchestration.
+- Structured extraction.
+- Journal and task APIs.
+- Reminder scheduling.
+- Search and export.
+- Validation and error handling.
+
+## Database
+**PostgreSQL + SQLAlchemy + Alembic**
+
+Store:
+- Users and profiles.
+- Sessions or refresh-token records.
+- Memories and source references.
+- Transcripts.
+- Generated outputs.
+- Tasks and schedules.
+- Reminders and notification status.
+- File metadata.
+- User preferences.
+
+SQLite can be used during local experimentation, but PostgreSQL is the recommended database for the multi-user application.
+
+## File storage
+Use a storage abstraction that can support local development storage and later S3-compatible object storage.
+
+Store file metadata in PostgreSQL and the actual audio, image and document files in file storage.
+
+## AI and processing services
+- Speech-to-text model or service for voice recordings.
+- LLM service for structured extraction and generation.
+- Vision-capable model for optional image descriptions.
+- Optional image-generation service.
+- Pydantic for validating AI output.
+- Background job processing for longer tasks.
+
+Use configurable model providers so the application is not tied permanently to one AI vendor.
+
+## Background jobs and reminders
+Use a job queue and worker for longer transcription and generation tasks. A Redis-backed queue such as Celery is one option.
+
+A persistent scheduler or scheduled-job service should handle reminders. Store reminder times and delivery status in the database so jobs can be retried safely.
+
+## Deployment
+- Frontend hosting.
+- Backend API hosting.
+- Managed PostgreSQL or a secured database server.
+- Persistent object storage.
+- HTTPS.
+- Environment-based configuration.
+- Error monitoring and backups.
+
+---
+
+# 3. Application Pages and Navigation
+
+The completed application should include the following screens.
+
+1. Landing page.
+2. Registration.
+3. Login.
+4. Email verification.
+5. Forgot password.
+6. Reset password.
+7. User onboarding.
+8. Dashboard.
+9. Daily memory creation.
+10. In-app voice recorder.
+11. Upload manager.
+12. Transcript review and editor.
+13. AI generation mode selection.
+14. Journal editor.
+15. Memory details.
+16. Memory timeline.
+17. Search results.
+18. Task manager.
+19. Calendar and schedule.
+20. Reminder centre.
+21. Vlog and social-media studio.
+22. Visual memory gallery.
+23. Personal insights.
+24. User profile.
+25. Settings and privacy.
+26. Data export and account deletion.
+27. Administration and service monitoring.
+
+The navigation should remain consistent across pages, and all pages should have loading, error, empty and success states where relevant.
+
+---
+
+# 4. Database Design
+
+The database should be designed around these entities.
+
+| Entity | Purpose |
+|---|---|
+| Users | Account credentials, identity and account status |
+| UserProfiles | Personal preferences and profile information |
+| Sessions | Active sessions or refresh-token metadata |
+| Memories | A daily memory and its date, title and status |
+| SourceAssets | Audio, photographs, documents and other uploads |
+| Transcripts | Transcribed text and processing metadata |
+| ExtractedEvents | Events, achievements, challenges and plans |
+| GeneratedOutputs | Journal entries, reflections, captions and scripts |
+| Tasks | Pending and completed actions |
+| Schedules | User-approved time blocks |
+| Reminders | Reminder times, status and recurrence |
+| Notifications | In-app and external delivery records |
+| Tags | Reusable memory labels |
+| MemoryTags | Many-to-many relationship between memories and tags |
+| UserPrompts | Custom and saved generation prompts |
+| AIJobRecords | Processing status, errors and usage metadata |
+| AuditEvents | Security-relevant events without unnecessary private content |
+
+Every user-owned record must have an ownership relationship to the appropriate user account. All API queries must enforce that relationship.
+
+---
+
+# 5. Core Application Workflow
+
+## Daily memory workflow
+
+**Step 1:** User logs in.
+
+**Step 2:** User opens the dashboard and selects Create Memory.
+
+**Step 3:** User records a voice note, types text or uploads recordings, photographs and documents.
+
+**Step 4:** The application validates the inputs and stores them securely.
+
+**Step 5:** Audio is transcribed; supported documents and images are processed when requested.
+
+**Step 6:** The user reviews and corrects the source text.
+
+**Step 7:** The AI extracts events, achievements, challenges, tasks and plans into validated structured data.
+
+**Step 8:** The user chooses a generation mode.
+
+**Step 9:** The AI generates the journal, reflection, tasks, vlog script, caption and suggestions.
+
+**Step 10:** The user reviews, edits and saves the outputs.
+
+**Step 11:** The user confirms any proposed tasks, schedules or reminders.
+
+**Step 12:** The dashboard and memory timeline update.
+
+**Step 13:** The user can return later to search, edit, export or delete the memory.
+
+---
+
+# 6. API Design
+
+The backend should expose documented, versioned REST endpoints.
+
+Example endpoint groups:
+
+### Authentication
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/logout`
+- `POST /api/v1/auth/forgot-password`
+- `POST /api/v1/auth/reset-password`
+- `POST /api/v1/auth/verify-email`
+- `POST /api/v1/auth/refresh`
+
+### Profile
+- `GET /api/v1/users/me`
+- `PATCH /api/v1/users/me`
+- `DELETE /api/v1/users/me`
+
+### Memories and files
+- `GET /api/v1/memories`
+- `POST /api/v1/memories`
+- `GET /api/v1/memories/{memory_id}`
+- `PATCH /api/v1/memories/{memory_id}`
+- `DELETE /api/v1/memories/{memory_id}`
+- `POST /api/v1/assets/upload`
+- `POST /api/v1/assets/{asset_id}/transcribe`
+
+### AI processing
+- `POST /api/v1/memories/{memory_id}/extract`
+- `POST /api/v1/memories/{memory_id}/generate`
+- `GET /api/v1/jobs/{job_id}`
+
+### Tasks and reminders
+- `GET /api/v1/tasks`
+- `POST /api/v1/tasks`
+- `PATCH /api/v1/tasks/{task_id}`
+- `DELETE /api/v1/tasks/{task_id}`
+- `GET /api/v1/reminders`
+- `POST /api/v1/reminders`
+- `PATCH /api/v1/reminders/{reminder_id}`
+
+### Search and export
+- `GET /api/v1/search`
+- `POST /api/v1/exports`
+- `GET /api/v1/exports/{export_id}`
+
+All endpoints require appropriate validation and authorization. These are planned interface contracts, not a claim that the endpoints have already been implemented.
+
+---
+
+# 7. Security, Privacy and Reliability
+
+Because LifeLog AI stores personal memories, privacy and security must be built into the design.
+
+- Hash passwords using a modern password-hashing algorithm.
+- Use secure authentication cookies or a carefully implemented token strategy.
+- Enforce user-level authorization on every protected endpoint.
+- Validate uploaded file types, sizes and contents.
+- Generate safe server-side file identifiers instead of trusting uploaded filenames.
+- Store API keys in environment variables or a secrets manager.
+- Use HTTPS in production.
+- Limit login attempts and expensive AI requests.
+- Keep uploaded files private.
+- Avoid logging raw diary entries or full transcripts unnecessarily.
+- Provide clear consent before sending data to external AI providers.
+- Give users control over saved recordings and generated content.
+- Support account-data export and deletion.
+- Configure database and file-storage backups.
+- Make background jobs retryable and prevent duplicate reminder delivery.
+- Provide clear error messages without exposing secrets.
+
+---
+
+# 8. Complete Development Phases
+
+## Phase 1 — Project foundation
+- Define requirements and acceptance criteria.
+- Create frontend and backend repositories.
+- Configure the development environment.
+- Set up PostgreSQL, migrations and configuration.
+- Establish API conventions and error handling.
+- Build the shared UI layout.
+
+**Deliverable:** Application skeleton running locally.
+
+## Phase 2 — Authentication and profiles
+- Registration and login.
+- Password hashing and secure sessions.
+- Email verification and password reset.
+- Protected routes.
+- Profile management.
+- Account settings.
+
+**Deliverable:** A multi-user application with private accounts.
+
+## Phase 3 — Dashboard and memory capture
+- Dashboard layout.
+- Create and edit memories.
+- In-app audio recording.
+- Audio upload.
+- Photograph and document upload.
+- File previews and validation.
+- Draft saving.
+- Secure asset storage.
+
+**Deliverable:** Users can capture and manage daily memories.
+
+## Phase 4 — Transcription and document processing
+- Speech-to-text integration.
+- Transcript editing.
+- Document text extraction.
+- Optional image descriptions.
+- Processing status and background jobs.
+- Retry and failure handling.
+
+**Deliverable:** Multiple input types can be converted into reviewable source material.
+
+## Phase 5 — AI understanding and generation
+- Structured extraction schema.
+- Day-understanding engine.
+- Prompt-mode engine.
+- Journal generation.
+- Reflection generation.
+- Task extraction.
+- Vlog and social-media outputs.
+- Structured validation and regeneration.
+
+**Deliverable:** The core LifeLog AI workflow functions end to end.
+
+## Phase 6 — Memory library and search
+- Saved memories.
+- Timeline.
+- Search and filters.
+- Tags and favourites.
+- Memory detail pages.
+- Editing, deletion and export.
+
+**Deliverable:** A searchable personal memory library.
+
+## Phase 7 — Tasks, schedules and reminders
+- Task CRUD operations.
+- Due dates and priorities.
+- Schedule generation.
+- User confirmation of proposed plans.
+- Persistent reminder scheduling.
+- In-app and email notifications.
+- Snoozing and delivery tracking.
+
+**Deliverable:** Tasks and reminders continue working even when the user closes the app.
+
+## Phase 8 — Visual and creative features
+- Image-prompt generation.
+- Optional image generation.
+- Visual memory gallery.
+- Daily vlog ideas.
+- Caption and story generation.
+- Tomorrow planning.
+- Personal insights.
+
+**Deliverable:** The creative features of the original concept are integrated.
+
+## Phase 9 — Security and quality assurance
+- Authentication and authorization tests.
+- Cross-user data-isolation tests.
+- File-upload security tests.
+- AI-output validation tests.
+- Mobile and desktop responsiveness.
+- Accessibility checks.
+- Performance and failure-recovery tests.
+- Backup and restoration tests.
+
+**Deliverable:** A tested application ready for controlled deployment.
+
+## Phase 10 — Production deployment
+- Configure production hosting.
+- Deploy frontend and API.
+- Configure the database and private file storage.
+- Configure HTTPS and secrets.
+- Set up monitoring and alerts.
+- Verify backups.
+- Test registration, uploads, generation and reminders in production.
+
+**Deliverable:** A deployed, usable application with documented setup and maintenance instructions.
+
+---
+
+# 9. Testing and Acceptance Criteria
+
+The application is not complete merely because the dashboard looks correct.
+
+The following must be tested:
+
+1. A user can register, verify their account and log in.
+2. A user can recover access through password reset.
+3. A user cannot view or modify another user's private data.
+4. A user can record audio in the browser where supported.
+5. A user can upload, preview and remove permitted files.
+6. Audio transcription can be reviewed and corrected.
+7. The system can extract validated structured information.
+8. All required generation modes return editable outputs.
+9. Memories persist after logout and login.
+10. Search and filters return the correct user's data.
+11. Tasks can be created, edited, completed and deleted.
+12. Confirmed reminders are delivered at the configured time.
+13. Failed AI jobs can be retried without corrupting the memory.
+14. Exports contain the selected data.
+15. Account deletion follows the documented deletion policy.
+16. The interface works on desktop and mobile layouts.
+17. Missing API keys and service failures are handled clearly.
+18. Private files cannot be downloaded by unauthorized users.
+
+---
+
+# 10. Definition of a Complete Working Application
+
+LifeLog AI will be considered complete when:
+
+- All required pages are implemented and connected.
+- Registration, login and profile management work.
+- All user data is persisted in the database.
+- Audio recording and uploads work.
+- Photograph and document uploads work.
+- Transcription and AI generation work with configured services.
+- The complete journal-generation workflow is functional.
+- Tasks, schedules and reminders work.
+- Memories can be searched, edited, exported and deleted.
+- The creative features are integrated.
+- Security and authorization tests pass.
+- The app can be deployed and started using documented instructions.
+
+Features requiring paid external AI services must be clearly documented, and users must be able to understand any usage costs before enabling them.
+
+---
+
+# 11. Recommended Implementation Order
+
+We should implement and verify the application in this order:
+
+1. Foundation and database.
+2. Authentication and profile.
+3. Dashboard and navigation.
+4. Memory creation and file uploads.
+5. Voice recording and transcription.
+6. Structured day understanding.
+7. Journal and generation modes.
+8. Memory library and search.
+9. Task management and reminders.
+10. Vlog and social-media studio.
+11. Visual memory generation.
+12. Tomorrow planner and analytics.
+13. Security testing and deployment.
+
+**Development rule:** Each phase must work before we build the next one. We should not create a large interface filled with nonfunctional buttons or placeholder outputs.
+
+The final result should be a maintainable full-stack application, not just a demonstration of individual AI features.

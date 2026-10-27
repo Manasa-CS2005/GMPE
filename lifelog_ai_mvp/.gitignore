@@ -1,0 +1,6 @@
+__pycache__/
+.env
+lifelog.db
+temp_voice_note*
+.venv/
+venv/
