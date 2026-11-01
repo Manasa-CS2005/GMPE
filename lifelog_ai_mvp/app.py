@@ -9,10 +9,25 @@ from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, ValidationError
+
+from data_management import (
+    delete_memory,
+    delete_user_account,
+    export_user_archive,
+    update_memory,
+)
+from generation import (
+    GENERATION_MODES,
+    generate_lifelog,
+    generate_visual_image,
+    generate_visual_prompt,
+    transcribe_audio,
+)
+from generation.formatting import format_personal_journal
+from reminders import default_database_path, initialize_reminder_store
 
 load_dotenv()
-DB_PATH = Path("lifelog.db")
+DB_PATH = default_database_path()
 ASSET_ROOT = Path("lifelog_assets")
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 ALLOWED_ASSETS = {
@@ -20,146 +35,6 @@ ALLOWED_ASSETS = {
 }
 
 st.set_page_config(page_title="LifeLog AI", page_icon="📔", layout="wide")
-
-# ---------- Validated day understanding ----------
-class StructuredDay(BaseModel):
-    date: str = Field(default_factory=lambda: date.today().isoformat())
-    summary: str = ""
-    events: list[str] = Field(default_factory=list)
-    achievements: list[str] = Field(default_factory=list)
-    challenges: list[str] = Field(default_factory=list)
-    mood: str = ""
-    completed_tasks: list[str] = Field(default_factory=list)
-    pending_tasks: list[str] = Field(default_factory=list)
-    future_plans: list[str] = Field(default_factory=list)
-    important_moments: list[str] = Field(default_factory=list)
-    source_references: list[str] = Field(default_factory=list)
-
-
-class StructuredJournal(BaseModel):
-    title: str = "Daily journal"
-    opening: str = ""
-    events: list[str] = Field(default_factory=list)
-    achievements: list[str] = Field(default_factory=list)
-    challenges: list[str] = Field(default_factory=list)
-    feelings: list[str] = Field(default_factory=list)
-    reflection: str = ""
-    gratitude: list[str] = Field(default_factory=list)
-    closing: str = ""
-
-
-class StructuredVlog(BaseModel):
-    title: str = "A day in my life"
-    hook: str = ""
-    scenes: list[str] = Field(default_factory=list)
-    voiceover: list[str] = Field(default_factory=list)
-    b_roll: list[str] = Field(default_factory=list)
-    closing: str = ""
-
-
-def extract_pending_tasks(note):
-    """Use lightweight NLP heuristics when no LLM is configured."""
-    task_markers = (
-        "need to ", "have to ", "must ", "should ", "remember to ",
-        "plan to ", "going to ", "todo:", "to-do:",
-    )
-    completed_markers = ("finished ", "completed ", "did ", "already ")
-    candidates = []
-    for sentence in __import__("re").split(r"(?<=[.!?])\s+|[;\n]+", note):
-        clean_sentence = " ".join(sentence.split()).strip(" -")
-        lowered = clean_sentence.lower()
-        if not clean_sentence or any(marker in lowered for marker in completed_markers):
-            continue
-        for marker in task_markers:
-            marker_index = lowered.find(marker)
-            if marker_index >= 0:
-                task = clean_sentence[marker_index + len(marker):].strip(" .,!?:")
-                if task and task not in candidates:
-                    candidates.append(task[0].upper() + task[1:])
-                break
-    return candidates
-
-
-def extract_completed_actions(note):
-    """Extract explicitly completed actions for demo-mode segregation."""
-    completed_markers = ("finished ", "completed ", "did ", "already ")
-    actions = []
-    for sentence in __import__("re").split(r"(?<=[.!?])\s+|[;\n]+", note):
-        clean_sentence = " ".join(sentence.split()).strip(" -")
-        lowered = clean_sentence.lower()
-        for marker in completed_markers:
-            marker_index = lowered.find(marker)
-            if marker_index >= 0:
-                action = clean_sentence[marker_index + len(marker):].strip(" .,!?:")
-                if action and action not in actions:
-                    actions.append(action[0].upper() + action[1:])
-                break
-    return actions
-
-
-def normalize_structured_outputs(result, note):
-    """Validate journals, vlogs, and task segregation returned by the model."""
-    fallback_tasks = extract_pending_tasks(note)
-    result.setdefault("structured_journal", {})
-    result.setdefault("structured_vlog", {})
-    try:
-        journal = StructuredJournal.model_validate(result["structured_journal"])
-    except ValidationError:
-        journal = StructuredJournal(
-            opening=result.get("journal", ""),
-            reflection=result.get("reflection", ""),
-            closing="End of today's record.",
-        )
-    try:
-        vlog = StructuredVlog.model_validate(result["structured_vlog"])
-    except ValidationError:
-        vlog = StructuredVlog(
-            hook="A short look at today's memory.",
-            scenes=["Opening shot of the day", "Main moment from the note", "Closing reflection"],
-            voiceover=[result.get("vlog_script", "")],
-            closing="That is one moment I want to remember.",
-        )
-    result["structured_journal"] = journal.model_dump()
-    result["structured_vlog"] = vlog.model_dump()
-    structured = result.get("structured_day", {})
-    if not isinstance(structured, dict):
-        structured = {}
-    llm_pending = structured.get("pending_tasks", result.get("tasks", []))
-    pending_tasks = [
-        str(task).strip() for task in llm_pending
-        if str(task).strip()
-    ]
-    if not pending_tasks and fallback_tasks:
-        pending_tasks = fallback_tasks
-    structured["pending_tasks"] = pending_tasks
-    if not structured.get("completed_tasks"):
-        structured["completed_tasks"] = extract_completed_actions(note)
-    result["structured_day"] = structured
-    result["tasks"] = pending_tasks
-    return result
-
-
-def validate_day_result(result, note):
-    """Validate and normalize the structured part of a generated result."""
-    structured = result.get("structured_day", {})
-    if not isinstance(structured, dict):
-        structured = {}
-    structured.setdefault("date", date.today().isoformat())
-    structured.setdefault("summary", result.get("journal", "")[:240])
-    structured.setdefault("pending_tasks", result.get("tasks", []))
-    try:
-        validated = StructuredDay.model_validate(structured)
-    except ValidationError:
-        validated = StructuredDay(
-            date=date.today().isoformat(),
-            summary=" ".join(note.split())[:240],
-            pending_tasks=[str(task) for task in result.get("tasks", []) if str(task).strip()],
-        )
-    normalized = validated.model_dump()
-    result["structured_day"] = normalized
-    result["tasks"] = normalized["pending_tasks"]
-    return normalize_structured_outputs(result, note)
-
 
 # ---------- Storage ----------
 def init_db():
@@ -241,6 +116,7 @@ def init_db():
         if "reminder_enabled" not in task_columns:
             conn.execute("ALTER TABLE tasks ADD COLUMN reminder_enabled INTEGER NOT NULL DEFAULT 0")
         conn.commit()
+    initialize_reminder_store(DB_PATH)
 
 def hash_password(password, salt=None):
     salt = salt or secrets.token_hex(16)
@@ -374,6 +250,11 @@ def create_task(user_id, title, due_date=None, priority="Normal", reminder_enabl
 
 def delete_task(user_id, task_id):
     with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            "DELETE FROM reminder_deliveries WHERE task_id IN "
+            "(SELECT id FROM tasks WHERE id = ? AND user_id = ?)",
+            (task_id, user_id),
+        )
         conn.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
         conn.commit()
 
@@ -476,152 +357,6 @@ def delete_asset(user_id, asset_id):
 
 init_db()
 
-# ---------- AI helpers ----------
-def transcribe_audio(uploaded_file):
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("Add OPENAI_API_KEY to your .env file to enable audio transcription.")
-    from openai import OpenAI
-    client = OpenAI(api_key=api_key)
-    suffix = Path(uploaded_file.name).suffix or ".wav"
-    temp_path = Path(f"temp_voice_note{suffix}")
-    try:
-        temp_path.write_bytes(uploaded_file.getvalue())
-        with temp_path.open("rb") as audio:
-            transcript = client.audio.transcriptions.create(model="whisper-1", file=audio)
-        return transcript.text
-    finally:
-        if temp_path.exists():
-            temp_path.unlink()
-
-def demo_result(note, mode):
-    """Fallback so the interface can be explored without an API key."""
-    clean_note = " ".join(note.split())
-    pending_tasks = extract_pending_tasks(note)
-    completed_actions = extract_completed_actions(note)
-    return {
-        "journal": f"Today, I wanted to remember this: {clean_note}",
-        "reflection": "What felt meaningful today? What challenged you? What is one thing you would like to carry into tomorrow?",
-        "tasks": pending_tasks,
-        "vlog_script": f"Today, {clean_note}",
-        "social_caption": "A little memory from today ✨",
-        "tomorrow_ideas": ["Choose one priority for tomorrow.", "Capture one small moment on video."],
-        "structured_journal": {
-            "title": f"{date.today().strftime('%B %d')} journal",
-            "opening": f"Today I noticed: {clean_note}",
-            "events": [],
-            "achievements": [],
-            "challenges": [],
-            "feelings": [],
-            "reflection": "What felt meaningful today?",
-            "gratitude": [],
-            "closing": "I will carry one useful lesson into tomorrow.",
-        },
-        "structured_vlog": {
-            "title": "A moment from today",
-            "hook": "Here is one moment I want to remember.",
-            "scenes": ["Opening shot", "Main moment from today's note", "Closing shot"],
-            "voiceover": [f"Today, {clean_note}"],
-            "b_roll": ["Details of the setting", "Hands or objects connected to the moment"],
-            "closing": "That is one moment I want to remember.",
-        },
-        "structured_day": {
-            "date": date.today().isoformat(),
-            "summary": clean_note[:240],
-            "events": [],
-            "achievements": [],
-            "challenges": [],
-            "mood": "",
-            "completed_tasks": completed_actions,
-            "pending_tasks": pending_tasks,
-            "future_plans": [],
-            "important_moments": [],
-            "source_references": ["daily note"],
-        },
-    }
-
-def generate_lifelog(note, mode):
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        return validate_day_result(demo_result(note, mode), note), "demo"
-
-    from openai import OpenAI
-    client = OpenAI(api_key=api_key)
-    system_prompt = """
-You are LifeLog AI, a supportive personal journaling assistant.
-Use only details present in the user's note. Do not invent people, places, events, feelings, deadlines, or promises.
-If something is unclear, say it is unclear. Treat the note as private personal content.
-Return ONLY valid JSON with these keys:
-journal (string), reflection (string), tasks (array of strings),
-vlog_script (string), social_caption (string), tomorrow_ideas (array of strings).
-Also return structured_journal with:
-title, opening, events, achievements, challenges, feelings, reflection, gratitude, closing.
-Also return structured_vlog with:
-title, hook, scenes, voiceover, b_roll, closing.
-Also include structured_day as an object with these keys:
-date, summary, events, achievements, challenges, mood, completed_tasks,
-pending_tasks, future_plans, important_moments, source_references.
-Separate completed_tasks from pending_tasks. Extract completed actions when the user
-explicitly says they finished or completed something. Extract a pending task only when the user
-explicitly says they need to do something, must do it, should do it, plans to do it,
-or otherwise describes an unfinished action. Never convert completed actions into tasks.
-Do not invent due dates.
-"""
-    user_prompt = f"""
-Selected generation mode: {mode}
-Daily note:
-{note}
-
-Generate the LifeLog outputs. Match the selected mode in tone:
-- Simple Journal: natural and concise
-- Personal Persona: warm, reflective, first-person
-- Structured Day: organized and factual
-- Reflection: thoughtful but not overly dramatic
-- Vlog Creator: visual, practical short-video script
-- Social Media: concise caption suitable for a personal post
-"""
-    response = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        temperature=0.7,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    )
-    content = response.choices[0].message.content
-    data = json.loads(content)
-    defaults = demo_result(note, mode)
-    for key, value in defaults.items():
-        if key not in data or data[key] is None:
-            data[key] = value
-    return validate_day_result(data, note), "ai"
-
-
-def generate_visual_prompt(memory_text, style):
-    clean_text = " ".join(memory_text.split())
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        return (
-            f"A {style.lower()} personal memory illustration inspired only by: {clean_text}. "
-            "No invented people, locations, or events; natural lighting and authentic details."
-        ), "demo"
-    from openai import OpenAI
-    client = OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        temperature=0.4,
-        messages=[{
-            "role": "user",
-            "content": (
-                "Write one concise image-generation prompt for a personal memory. "
-                "Use only the supplied facts and do not infer identity, emotion, or location. "
-                f"Visual style: {style}. Memory: {clean_text}"
-            ),
-        }],
-    )
-    return response.choices[0].message.content.strip(), "ai"
-
 # ---------- Authentication ----------
 def render_auth():
     st.title("📔 LifeLog AI")
@@ -687,14 +422,15 @@ with st.sidebar:
     st.write("Start with a voice note or type what happened today.")
     mode = st.selectbox(
         "Choose a generation mode",
-        ["Simple Journal", "Personal Persona", "Structured Day", "Reflection", "Vlog Creator", "Social Media"]
+        GENERATION_MODES,
     )
+    output_length = st.selectbox("Output length", ["Short", "Medium", "Detailed"], index=1)
     st.divider()
     st.caption("Privacy tip: use notes you are comfortable processing with the configured AI service.")
 
-tab_dashboard, tab_create, tab_memories, tab_tasks, tab_visual, tab_profile, tab_admin, tab_about = st.tabs(
+tab_dashboard, tab_create, tab_memories, tab_tasks, tab_visual, tab_profile, tab_data, tab_admin, tab_about = st.tabs(
     ["⌂ Dashboard", "✨ Create today's memory", "🗂️ Saved memories", "✅ Tasks",
-     "🎨 Visual memories", "⚙ Profile", "🛠️ Admin", "ℹ️ About"]
+     "🎨 Visual memories", "⚙ Profile", "🔐 Data & privacy", "🛠️ Admin", "ℹ️ About"]
 )
 
 with tab_dashboard:
@@ -713,7 +449,7 @@ with tab_dashboard:
     ]
     if reminder_tasks:
         st.warning(
-            "Reminders: " + "; ".join(task[1] for task in reminder_tasks[:5])
+            "In-app reminders: " + "; ".join(task[1] for task in reminder_tasks[:5])
         )
     st.divider()
     left, right = st.columns([1.35, 1])
@@ -757,6 +493,37 @@ with tab_create:
     if attachments:
         for attachment in attachments:
             st.caption(f"{attachment.name} · {len(attachment.getvalue()) / 1024:.1f} KB")
+    document_context = []
+    for attachment in attachments or []:
+        extension = Path(attachment.name).suffix.lower().lstrip(".")
+        if extension in {"pdf", "txt", "docx"}:
+            try:
+                extracted_text = extract_asset_text(attachment.getvalue(), extension)
+            except Exception as error:
+                st.error(f"Could not extract text from {attachment.name}: {error}")
+                continue
+            if extracted_text:
+                document_context.append((attachment.name, extracted_text))
+    include_documents = False
+    if document_context:
+        include_documents = st.checkbox(
+            "Include extracted document text in AI processing",
+            value=False,
+            help="Review the extracted text before choosing to send it with your note.",
+        )
+        with st.expander("Review extracted document text"):
+            for name, extracted_text in document_context:
+                st.markdown(f"**{name}**")
+                st.text(extracted_text[:12000])
+                if len(extracted_text) > 12000:
+                    st.caption("Preview limited to 12,000 characters.")
+    if mode == "Custom Prompt":
+        custom_prompt = st.text_area(
+            "Custom generation instructions",
+            placeholder="Describe the style or format you want. LifeLog will still use only facts in your note.",
+        )
+    else:
+        custom_prompt = ""
     st.markdown("#### Record directly from your microphone")
     st.caption("Allow microphone access in your browser, record your note, then transcribe it into the editable note below.")
     recorded_audio = st.audio_input("Record a voice note", key="lifelog_microphone")
@@ -799,7 +566,27 @@ with tab_create:
         else:
             with st.spinner("Creating your LifeLog..."):
                 try:
-                    result, status = generate_lifelog(note.strip(), mode)
+                    extra_context = ""
+                    if include_documents:
+                        extra_context = "\n\n".join(
+                            f"[{name}]\n{text}" for name, text in document_context
+                        )
+                    result, status = generate_lifelog(
+                        note.strip(),
+                        mode,
+                        profile={
+                            "writing_style": writing_style,
+                            "journal_tone": journal_tone,
+                            "interests": interests,
+                        },
+                        extra_context=extra_context,
+                        custom_prompt=custom_prompt,
+                        output_length=output_length,
+                    )
+                    structured_journal = result.setdefault("structured_journal", {})
+                    structured_journal["date"] = memory_date.isoformat()
+                    if memory_title.strip():
+                        structured_journal["title"] = memory_title.strip()
                     st.session_state["lifelog_result"] = result
                     st.session_state["lifelog_source"] = note.strip()
                     st.session_state["lifelog_mode"] = mode
@@ -831,39 +618,51 @@ with tab_create:
         else:
             st.success("Your LifeLog is ready.")
         st.subheader("2. Your generated outputs")
-        journal_tab, structured_tab, reflect_tab, tasks_tab, vlog_tab, social_tab, tomorrow_tab = st.tabs(
-            ["📔 Journal", "🧭 Day understanding", "💭 Reflection", "✅ Tasks", "🎬 Vlog", "📱 Social", "🌅 Tomorrow"]
+        journal_tab, structured_tab, reflect_tab, tasks_tab, vlog_tab, social_tab, analogy_tab, tomorrow_tab = st.tabs(
+            ["📔 Journal", "🧭 Day understanding", "💭 Reflection", "✅ Tasks", "🎬 Vlog", "📱 Social", "🔎 Analogy", "🌅 Tomorrow"]
         )
         with journal_tab:
             journal = result.get("structured_journal", {})
+            structured_day = result.get("structured_day", {})
+            journal_date = (
+                journal.get("date")
+                or structured_day.get("date")
+                or date.today().isoformat()
+            )
             st.subheader(journal.get("title", "Daily journal"))
-            st.markdown("**Opening**")
-            st.write(journal.get("opening", result.get("journal", "")))
-            for label, key in (
-                ("Events", "events"), ("Achievements", "achievements"),
-                ("Challenges", "challenges"), ("Feelings", "feelings"),
-                ("Gratitude", "gratitude"),
-            ):
-                values = journal.get(key, [])
+            st.caption(f"Date: {journal_date}")
+            journal_sections = (
+                (
+                    "What happened today",
+                    [
+                        journal.get("opening", result.get("journal", "")),
+                        *journal.get("events", []),
+                    ],
+                ),
+                ("What went well", journal.get("achievements", [])),
+                ("Challenges", journal.get("challenges", [])),
+                ("How I felt", journal.get("feelings", [])),
+                ("Gratitude", journal.get("gratitude", [])),
+                (
+                    "Reflection",
+                    [journal.get("reflection", result.get("reflection", ""))],
+                ),
+                ("Looking ahead", structured_day.get("future_plans", [])),
+            )
+            for label, values in journal_sections:
+                st.markdown(f"**{label}**")
                 if values:
-                    st.markdown(f"**{label}**")
                     for value in values:
-                        st.write(f"• {value}")
-            st.markdown("**Reflection**")
-            st.write(journal.get("reflection", result.get("reflection", "")))
-            st.markdown("**Closing**")
-            st.write(journal.get("closing", ""))
-            journal_download = "\n\n".join([
-                journal.get("title", "Daily journal"),
-                f"Opening\n{journal.get('opening', '')}",
-                f"Events\n" + "\n".join(f"- {item}" for item in journal.get("events", [])),
-                f"Achievements\n" + "\n".join(f"- {item}" for item in journal.get("achievements", [])),
-                f"Challenges\n" + "\n".join(f"- {item}" for item in journal.get("challenges", [])),
-                f"Feelings\n" + "\n".join(f"- {item}" for item in journal.get("feelings", [])),
-                f"Reflection\n{journal.get('reflection', '')}",
-                f"Gratitude\n" + "\n".join(f"- {item}" for item in journal.get("gratitude", [])),
-                f"Closing\n{journal.get('closing', '')}",
-            ])
+                        if str(value).strip():
+                            st.write(f"• {value}")
+                else:
+                    st.caption("Not mentioned in this note.")
+            if journal.get("closing"):
+                st.markdown("**Closing**")
+                st.write(journal["closing"])
+            journal_download = format_personal_journal(
+                journal, journal_date, structured_day.get("future_plans", [])
+            )
             st.download_button("Download structured journal", journal_download, file_name="lifelog_journal.txt")
         with structured_tab:
             structured = result.get("structured_day", {})
@@ -937,9 +736,31 @@ with tab_create:
             st.download_button("Download structured vlog", vlog_download, file_name="lifelog_vlog_script.txt")
         with social_tab:
             st.write(result.get("social_caption", ""))
+            social = result.get("structured_social", {})
+            for alternative in social.get("alternatives", []):
+                st.write(f"• {alternative}")
+            if social.get("story_text"):
+                st.markdown("**Story text**")
+                st.write(social["story_text"])
+            if social.get("hashtags"):
+                st.caption(" ".join(social["hashtags"]))
             if st.button("Copy caption text", key="copy_caption"):
                 st.code(result.get("social_caption", ""))
                 st.caption("Select and copy the caption shown above.")
+        with analogy_tab:
+            analogy = result.get("structured_analogy", {})
+            if analogy.get("analogy"):
+                st.write(analogy["analogy"])
+            if analogy.get("mapping"):
+                st.markdown("**How the analogy maps**")
+                for item in analogy["mapping"]:
+                    st.write(f"• {item}")
+            if analogy.get("simpler_version"):
+                st.markdown("**Simpler version**")
+                st.write(analogy["simpler_version"])
+            if analogy.get("detailed_version"):
+                st.markdown("**More detail**")
+                st.write(analogy["detailed_version"])
         with tomorrow_tab:
             for idea in result.get("tomorrow_ideas", []):
                 st.write(f"• {idea}")
@@ -982,6 +803,66 @@ with tab_memories:
                     file_name=f"{title.replace(' ', '_')}.txt",
                     key=f"download_memory_{memory_id}",
                 )
+                with st.form(f"edit_memory_{memory_id}"):
+                    edited_title = st.text_input("Title", value=title)
+                    edited_tags = st.text_input("Tags", value=tags)
+                    try:
+                        saved_date = datetime.strptime(
+                            memory_date or created_at[:10], "%Y-%m-%d"
+                        ).date()
+                    except ValueError:
+                        saved_date = date.today()
+                    edited_date = st.date_input(
+                        "Memory date", value=saved_date, key=f"memory_date_{memory_id}"
+                    )
+                    edited_source = st.text_area(
+                        "Original note", value=source_text, key=f"memory_source_{memory_id}"
+                    )
+                    edited_journal = st.text_area(
+                        "Generated journal",
+                        value=saved.get("journal", source_text),
+                        key=f"memory_journal_{memory_id}",
+                    )
+                    if st.form_submit_button("Save memory changes"):
+                        saved["journal"] = edited_journal
+                        structured_journal = saved.get("structured_journal")
+                        if isinstance(structured_journal, dict):
+                            structured_journal["opening"] = edited_journal
+                            structured_journal["date"] = edited_date.isoformat()
+                            structured_journal["title"] = edited_title.strip() or "Daily journal"
+                        if update_memory(
+                            DB_PATH,
+                            user["id"],
+                            memory_id,
+                            edited_title,
+                            edited_tags,
+                            edited_date.isoformat(),
+                            edited_source,
+                            saved,
+                        ):
+                            st.success("Memory updated.")
+                            st.rerun()
+                        st.error("This memory could not be found in your account.")
+                with st.form(f"delete_memory_{memory_id}"):
+                    confirm_memory_delete = st.checkbox(
+                        "I understand this permanently deletes the memory and its attachments.",
+                        key=f"confirm_memory_delete_{memory_id}",
+                    )
+                    if st.form_submit_button("Delete memory"):
+                        if not confirm_memory_delete:
+                            st.warning("Confirm deletion before continuing.")
+                        else:
+                            try:
+                                deleted = delete_memory(
+                                    DB_PATH, ASSET_ROOT, user["id"], memory_id
+                                )
+                            except (OSError, ValueError) as error:
+                                st.error(f"Could not fully remove the memory files: {error}")
+                            else:
+                                if deleted:
+                                    st.success("Memory deleted.")
+                                    st.rerun()
+                                st.error("This memory could not be found in your account.")
 
 with tab_tasks:
     st.subheader("Your task list")
@@ -991,7 +872,10 @@ with tab_tasks:
         manual_due_enabled = st.checkbox("Set a due date")
         manual_due = st.date_input("Due date", value=date.today()) if manual_due_enabled else None
         manual_priority = st.selectbox("Priority", ["Low", "Normal", "High"], index=1)
-        manual_reminder = st.checkbox("Show reminder when the app is opened")
+        manual_reminder = st.checkbox(
+            "Email me on the due date",
+            help="The reminder worker and SMTP settings must be configured for email delivery.",
+        )
         if st.form_submit_button("Add task", type="primary"):
             if create_task(
                 user["id"], manual_task,
@@ -1034,7 +918,7 @@ with tab_tasks:
                             key=f"edit_priority_{task_id}",
                         )
                         edit_reminder = st.checkbox(
-                            "Show reminder when the app is opened",
+                            "Email me on the due date",
                             value=bool(reminder_enabled),
                             key=f"edit_reminder_{task_id}",
                         )
@@ -1067,12 +951,67 @@ with tab_profile:
         )
         edited_interests = st.text_input("Interests and goals", value=interests, placeholder="e.g. learning, health, creative work")
         edited_reminder = st.time_input("Preferred reminder time", value=datetime.strptime(reminder_time, "%H:%M").time())
+        st.caption(
+            "Email reminders use this time in the server's local time zone. "
+            "The reminder worker must be running."
+        )
         if st.form_submit_button("Save profile", type="primary"):
             save_profile(
                 user["id"], edited_name, edited_style, edited_tone,
                 edited_interests, edited_reminder.strftime("%H:%M"),
             )
             st.success("Profile preferences saved.")
+            st.rerun()
+
+with tab_data:
+    st.subheader("Your data and privacy")
+    st.caption(
+        "Export includes your profile, memories, tasks, attachment metadata, and original uploaded files."
+    )
+    if st.button("Prepare full account export", type="primary"):
+        try:
+            st.session_state["lifelog_export"] = export_user_archive(
+                DB_PATH, ASSET_ROOT, user["id"]
+            )
+        except (OSError, ValueError, LookupError, json.JSONDecodeError) as error:
+            st.error(f"Could not prepare your export: {error}")
+        else:
+            st.success("Your export is ready to download.")
+    if st.session_state.get("lifelog_export"):
+        st.download_button(
+            "Download account data (.zip)",
+            st.session_state["lifelog_export"],
+            file_name="lifelog-account-export.zip",
+            mime="application/zip",
+        )
+
+    st.divider()
+    st.subheader("Delete your account")
+    st.warning(
+        "This permanently deletes your account, memories, tasks, profile, and uploaded files. "
+        "Download an export first if you want to keep a copy."
+    )
+    with st.form("delete_account_form"):
+        deletion_password = st.text_input("Confirm your password", type="password")
+        confirm_account_delete = st.checkbox(
+            "I understand this action cannot be undone."
+        )
+        delete_account_submitted = st.form_submit_button("Permanently delete account")
+    if delete_account_submitted:
+        if not confirm_account_delete:
+            st.warning("Confirm that you understand the consequences before continuing.")
+        elif not authenticate_user(user["email"], deletion_password):
+            st.error("The password is incorrect.")
+        else:
+            try:
+                delete_user_account(DB_PATH, ASSET_ROOT, user["id"])
+            except ValueError as error:
+                st.error(f"Could not delete the account because stored file metadata is invalid: {error}")
+            except OSError as error:
+                st.session_state.clear()
+                st.error(f"Account records were removed, but file cleanup was incomplete: {error}")
+                st.stop()
+            st.session_state.clear()
             st.rerun()
 
 with tab_visual:
@@ -1133,10 +1072,12 @@ with tab_about:
     st.markdown("""
 - Voice-note upload and speech-to-text (requires an API key)
 - Editable transcript / typed daily note
-- Selectable prompt modes
+- Eight generation modes with profile preferences, output length, and custom instructions
+- Optional review and use of extracted document text
 - Journal, reflection, task extraction, vlog script, social caption, and tomorrow ideas
-- SQLite storage for generated memories
+- Searchable SQLite memories, with edit, delete, export, and account deletion controls
+- Tasks, private attachments, and a visual prompt studio
 
-**Next:** improve structured extraction, add reminders, create a visual memory timeline, and optionally generate images.
+**Not implemented yet:** production-grade account security, closed-app reminder delivery, a visual memory timeline, and actual image generation.
 """)
-    st.warning("This is an early MVP. It is not a substitute for a secure private diary service; avoid entering highly sensitive information.")
+    st.warning("This is a local MVP, not a production-grade private diary service. Avoid entering highly sensitive information.")

@@ -1,0 +1,20 @@
+[
+  {
+    "memory_id": 1,
+    "user_id": 10,
+    "date": "2026-10-28",
+    "text": "I walked through the garden after class. The quiet path helped me feel calm."
+  },
+  {
+    "memory_id": 2,
+    "user_id": 10,
+    "date": "2026-10-29",
+    "text": "I met a friend for tea and we talked about our project."
+  },
+  {
+    "memory_id": 3,
+    "user_id": 20,
+    "date": "2026-10-29",
+    "text": "I visited the park with my family."
+  }
+]

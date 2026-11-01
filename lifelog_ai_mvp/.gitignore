@@ -1,6 +1,11 @@
 __pycache__/
 .env
 lifelog.db
+lifelog_assets/
 temp_voice_note*
 .venv/
+.venv-experiments/
 venv/
+node_modules/
+dist/
+.vite/
